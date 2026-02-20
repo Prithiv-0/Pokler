@@ -1,0 +1,203 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport"
+        content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <title>Pokler — Poker Companion</title>
+    <!-- PWA & Mobile -->
+    <link rel="manifest" href="manifest.json">
+    <meta name="theme-color" content="#0a0e17">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="Pokler">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="format-detection" content="telephone=no">
+    <link rel="icon"
+        href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>♠</text></svg>">
+    <link rel="apple-touch-icon"
+        href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>♠</text></svg>">
+    <link
+        href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=Outfit:wght@400;500;600;700;800&display=swap"
+        rel="stylesheet">
+    <link rel="stylesheet" href="style.css">
+</head>
+
+<body>
+    <!-- ═══ LOBBY VIEW ═══ -->
+    <div id="lobby-view" class="view active">
+        <div class="lobby-container">
+            <div class="logo-section">
+                <div class="suit-decoration">
+                    <span class="suit spade">♠</span>
+                    <span class="suit heart">♥</span>
+                    <span class="suit diamond">♦</span>
+                    <span class="suit club">♣</span>
+                </div>
+                <h1 class="logo-title">POKLER</h1>
+                <p class="logo-subtitle">Poker Companion</p>
+            </div>
+
+            <div class="lobby-card">
+                <div class="input-group">
+                    <label for="player-name">Your Name</label>
+                    <input type="text" id="player-name" placeholder="Enter your name" maxlength="12" autocomplete="off">
+                </div>
+
+                <div class="lobby-actions">
+                    <button id="btn-create" class="btn btn-primary btn-lg">
+                        <span class="btn-icon">🃏</span>
+                        Create Room
+                    </button>
+                    <div class="divider"><span>or</span></div>
+                    <div class="join-row">
+                        <input type="text" id="room-code-input" placeholder="Room Code" maxlength="4" autocomplete="off"
+                            class="code-input">
+                        <button id="btn-join" class="btn btn-secondary btn-lg">Join</button>
+                    </div>
+                </div>
+            </div>
+
+            <div id="lobby-error" class="error-msg hidden"></div>
+        </div>
+    </div>
+
+    <!-- ═══ GAME VIEW ═══ -->
+    <div id="game-view" class="view">
+        <!-- Top Bar -->
+        <div class="top-bar">
+            <div class="top-bar-left">
+                <span class="room-badge" id="room-code-display"></span>
+                <span class="round-badge" id="round-stage-display">Waiting</span>
+            </div>
+            <div class="top-bar-right">
+                <button id="btn-menu" class="btn-icon-only" title="Menu">☰</button>
+            </div>
+        </div>
+
+        <!-- Pot Display -->
+        <div class="pot-section">
+            <div class="pot-display">
+                <div class="pot-label">POT</div>
+                <div class="pot-amount" id="pot-amount">0</div>
+            </div>
+        </div>
+
+        <!-- Players Ring -->
+        <div class="players-section" id="players-section">
+            <!-- Dynamically populated -->
+        </div>
+
+        <!-- Your Status -->
+        <div class="your-status" id="your-status">
+            <div class="your-chips">
+                <span class="chip-icon">🪙</span>
+                <span id="your-chip-count">1000</span>
+            </div>
+            <div class="your-bet" id="your-bet-display">
+                Bet: <span id="your-current-bet">0</span>
+            </div>
+        </div>
+
+        <!-- Action Panel -->
+        <div class="action-panel" id="action-panel">
+            <div class="action-buttons" id="action-buttons">
+                <button class="btn btn-check" data-action="check" id="btn-check">
+                    <span class="action-label">Check</span>
+                </button>
+                <button class="btn btn-call" data-action="call" id="btn-call">
+                    <span class="action-label">Call</span>
+                    <span class="action-amount" id="call-amount"></span>
+                </button>
+                <button class="btn btn-raise" data-action="raise" id="btn-raise">
+                    <span class="action-label">Raise</span>
+                </button>
+                <button class="btn btn-allin" data-action="all-in" id="btn-allin">
+                    <span class="action-label">All In</span>
+                </button>
+                <button class="btn btn-fold" data-action="fold" id="btn-fold">
+                    <span class="action-label">Fold</span>
+                </button>
+            </div>
+
+            <!-- Raise Slider (hidden by default) -->
+            <div class="raise-panel hidden" id="raise-panel">
+                <div class="raise-header">
+                    <span>Raise Amount</span>
+                    <span class="raise-value" id="raise-value">0</span>
+                </div>
+                <input type="range" id="raise-slider" min="0" max="1000" value="0" class="raise-slider">
+                <div class="raise-presets" id="raise-presets">
+                    <button class="btn btn-preset" data-multiply="2">2×</button>
+                    <button class="btn btn-preset" data-multiply="3">3×</button>
+                    <button class="btn btn-preset" data-multiply="0.5">½ Pot</button>
+                    <button class="btn btn-preset" data-multiply="1">Pot</button>
+                </div>
+                <div class="raise-actions">
+                    <button class="btn btn-secondary" id="raise-cancel">Cancel</button>
+                    <button class="btn btn-raise" id="raise-confirm">Confirm Raise</button>
+                </div>
+            </div>
+
+            <!-- Waiting state -->
+            <div class="waiting-msg" id="waiting-msg">
+                <div class="waiting-dots">
+                    <span>●</span><span>●</span><span>●</span>
+                </div>
+                <span id="waiting-text">Waiting for your turn...</span>
+            </div>
+        </div>
+
+        <!-- Host Controls -->
+        <div class="host-controls hidden" id="host-controls">
+            <button class="btn btn-deal" id="btn-start-round">
+                <span class="btn-icon">🃏</span> Deal New Hand
+            </button>
+            <div class="winner-select hidden" id="winner-select">
+                <p class="winner-label">Select Winner(s):</p>
+                <div id="winner-options"></div>
+                <button class="btn btn-primary" id="btn-award-pot">Award Pot</button>
+            </div>
+        </div>
+
+        <!-- Toast Container -->
+        <div id="toast-container"></div>
+
+        <!-- Menu Sidebar -->
+        <div class="menu-overlay hidden" id="menu-overlay">
+            <div class="menu-panel">
+                <div class="menu-header">
+                    <h3>Menu</h3>
+                    <button class="btn-icon-only" id="btn-close-menu">✕</button>
+                </div>
+                <div class="menu-body">
+                    <div class="menu-info">
+                        <div class="info-row">
+                            <span>Room</span>
+                            <span id="menu-room-code"></span>
+                        </div>
+                        <div class="info-row">
+                            <span>Blinds</span>
+                            <span id="menu-blinds"></span>
+                        </div>
+                    </div>
+                    <div class="menu-section">
+                        <h4>Action Log</h4>
+                        <div class="action-log" id="action-log"></div>
+                    </div>
+                    <div class="menu-section host-only hidden" id="host-menu-section">
+                        <h4>Host Controls</h4>
+                        <button class="btn btn-warning" id="btn-reset-game">🔄 Reset Game</button>
+                    </div>
+                    <button class="btn btn-danger" id="btn-leave">Leave Room</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="/socket.io/socket.io.js"></script>
+    <script src="app.js"></script>
+</body>
+
+</html>
