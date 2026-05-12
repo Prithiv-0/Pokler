@@ -183,6 +183,7 @@ function attemptResume() {
         if (res && res.success) {
             myId = socket.id;
             isHost = !!res.isHost;
+            lastStateVersion = 0;
             switchToGame();
             showToast('Session restored', 'info');
             return;
@@ -390,7 +391,7 @@ function renderHoleCards() {
 }
 
 function getRaiseLimits(me) {
-    const callAmount = gameState.currentBet - me.currentBet;
+    const callAmount = Math.max(0, gameState.currentBet - me.currentBet);
     const minRaise = gameState.minRaise + callAmount;
     const maxRaise = me.chips;
     const raiseFloor = Math.min(minRaise, maxRaise);
