@@ -389,7 +389,7 @@ function renderHoleCards() {
 }
 
 function getRaiseLimits(me) {
-    const { toCall, canRaise } = getRaiseLimits(me);
+    const toCall = gameState.currentBet - me.currentBet;
     const minRaise = gameState.minRaise + toCall;
     const maxRaise = me.chips;
     const raiseFloor = Math.min(minRaise, maxRaise);

@@ -56,6 +56,7 @@ function getStraightHigh(values) {
     const window = unique.slice(i, i + 5);
     if (window[0] - window[4] === 4) return window[0];
   }
+  // Wheel straight (A-2-3-4-5) uses 5 as the high card.
   const wheel = [14, 5, 4, 3, 2];
   return wheel.every(v => unique.includes(v)) ? 5 : null;
 }

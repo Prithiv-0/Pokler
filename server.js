@@ -524,7 +524,7 @@ function handleAction(room, playerId, action, amount, options = {}) {
             const isAllIn = raiseAmount >= player.chips;
             if (raiseSize < room.minRaise && !isAllIn) {
                 const minRaiseTotal = room.minRaise + toCall;
-                return { error: `Minimum raise is ${minRaiseTotal} chips` };
+                return { error: `Minimum raise amount is ${minRaiseTotal} chips` };
             }
 
             const committed = commitBet(room, player, raiseAmount);
