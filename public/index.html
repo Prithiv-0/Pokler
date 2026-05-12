@@ -70,8 +70,10 @@
             <div class="top-bar-left">
                 <span class="room-badge" id="room-code-display"></span>
                 <span class="round-badge" id="round-stage-display">Waiting</span>
+                <span class="hand-badge" id="hand-id-display">Hand #0</span>
             </div>
             <div class="top-bar-right">
+                <span class="connection-status connected" id="connection-status">Connected</span>
                 <button id="btn-menu" class="btn-icon-only" title="Menu">☰</button>
             </div>
         </div>
@@ -82,6 +84,18 @@
                 <div class="pot-label">POT</div>
                 <div class="pot-amount" id="pot-amount">0</div>
             </div>
+        </div>
+
+        <!-- Board Cards -->
+        <div class="board-section">
+            <div class="board-label">Board</div>
+            <div class="board-cards" id="board-cards"></div>
+        </div>
+
+        <!-- Your Cards -->
+        <div class="hole-section">
+            <div class="hole-label">Your Cards</div>
+            <div class="hole-cards" id="hole-cards"></div>
         </div>
 
         <!-- Players Ring -->
@@ -154,11 +168,6 @@
             <button class="btn btn-deal" id="btn-start-round">
                 <span class="btn-icon">🃏</span> Deal New Hand
             </button>
-            <div class="winner-select hidden" id="winner-select">
-                <p class="winner-label">Select Winner(s):</p>
-                <div id="winner-options"></div>
-                <button class="btn btn-primary" id="btn-award-pot">Award Pot</button>
-            </div>
         </div>
 
         <!-- Toast Container -->
