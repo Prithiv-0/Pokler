@@ -388,6 +388,15 @@ function renderHoleCards() {
     }
 }
 
+function getRaiseLimits(me) {
+    const { toCall, canRaise } = getRaiseLimits(me);
+    const minRaise = gameState.minRaise + toCall;
+    const maxRaise = me.chips;
+    const raiseFloor = Math.min(minRaise, maxRaise);
+    const canRaise = maxRaise > toCall;
+    return { toCall, minRaise, maxRaise, raiseFloor, canRaise };
+}
+
 function renderActions() {
     const me = gameState.players.find(p => p.isYou);
     if (!me) return;
@@ -460,8 +469,7 @@ function renderActions() {
     }
 
     // Raise
-    const minRaiseAmount = gameState.minRaise + gameState.currentBet - me.currentBet;
-    btnRaise.disabled = me.chips < minRaiseAmount;
+    btnRaise.disabled = !canRaise;
 
     // All-in
     btnAllin.disabled = false;
@@ -547,21 +555,18 @@ btnRaise.addEventListener('click', () => {
     const me = gameState.players.find(p => p.isYou);
     if (!me) return;
 
-    const toCall = gameState.currentBet - me.currentBet;
-    const minRaise = gameState.minRaise + toCall;
-    const maxRaise = me.chips;
-
-    if (minRaise > maxRaise) {
+    const limits = getRaiseLimits(me);
+    if (!limits.canRaise) {
         showToast('Not enough chips to raise', 'warning');
         raiseMode = false;
         renderActions();
         return;
     }
 
-    raiseSlider.min = minRaise;
-    raiseSlider.max = maxRaise;
-    raiseSlider.value = minRaise;
-    raiseValue.textContent = minRaise;
+    raiseSlider.min = limits.raiseFloor;
+    raiseSlider.max = limits.maxRaise;
+    raiseSlider.value = limits.raiseFloor;
+    raiseValue.textContent = limits.raiseFloor;
 
     renderActions();
 });
@@ -598,10 +603,9 @@ raisePresets.addEventListener('click', (e) => {
         value = Math.floor(gameState.currentBet * multiply);
     }
 
-    const toCall = gameState.currentBet - me.currentBet;
-    const minRaise = gameState.minRaise + toCall;
-    value = Math.max(value, minRaise);
-    value = Math.min(value, me.chips);
+    const limits = getRaiseLimits(me);
+    value = Math.max(value, limits.raiseFloor);
+    value = Math.min(value, limits.maxRaise);
 
     raiseSlider.value = value;
     raiseValue.textContent = value;

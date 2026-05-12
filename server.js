@@ -34,7 +34,7 @@ function generateRoomCode() {
 }
 
 function generatePlayerToken() {
-    return crypto.randomBytes(16).toString('hex');
+    return crypto.randomBytes(32).toString('hex');
 }
 
 function serializeCard(card) {
@@ -364,7 +364,12 @@ function advanceAfterAction(room) {
 
 function applyAutoActions(room) {
     let iterationCount = 0;
-    while (room.roundActive && room.currentTurnIndex !== -1 && iterationCount < room.players.length) {
+    const maxIterations = room.players.length + (room.pendingToAct ? room.pendingToAct.size : 0);
+    while (room.roundActive && room.pendingToAct && room.pendingToAct.size > 0 && iterationCount < maxIterations) {
+        if (room.currentTurnIndex === -1) {
+            room.currentTurnIndex = getNextPendingIndex(room, 0);
+            if (room.currentTurnIndex === -1) break;
+        }
         const player = room.players[room.currentTurnIndex];
         if (!player || player.folded || player.eliminated || player.allIn) {
             room.currentTurnIndex = getNextPendingIndex(room, room.currentTurnIndex);
@@ -488,7 +493,7 @@ function handleAction(room, playerId, action, amount, options = {}) {
             break;
 
         case 'check':
-            if (toCall > 0) return { error: 'Cannot check, must call or fold' };
+            if (toCall > 0) return { error: 'Cannot check, must call, raise, or fold' };
             logEntry.detail = 'checked';
             break;
 
@@ -518,8 +523,8 @@ function handleAction(room, playerId, action, amount, options = {}) {
             const raiseSize = totalAfter - room.currentBet;
             const isAllIn = raiseAmount >= player.chips;
             if (raiseSize < room.minRaise && !isAllIn) {
-                const minTotal = room.minRaise + toCall;
-                return { error: `Minimum raise is ${minTotal} chips` };
+                const minRaiseTotal = room.minRaise + toCall;
+                return { error: `Minimum raise is ${minRaiseTotal} chips` };
             }
 
             const committed = commitBet(room, player, raiseAmount);

@@ -51,8 +51,11 @@ function compareHandScores(a, b) {
 
 function getStraightHigh(values) {
   const unique = Array.from(new Set(values)).sort((a, b) => b - a);
-  if (unique.length !== 5) return null;
-  if (unique[0] - unique[4] === 4) return unique[0];
+  if (unique.length < 5) return null;
+  for (let i = 0; i <= unique.length - 5; i += 1) {
+    const window = unique.slice(i, i + 5);
+    if (window[0] - window[4] === 4) return window[0];
+  }
   const wheel = [14, 5, 4, 3, 2];
   return wheel.every(v => unique.includes(v)) ? 5 : null;
 }
