@@ -461,7 +461,7 @@ function renderActions() {
 
     // Raise
     const minRaiseAmount = gameState.minRaise + gameState.currentBet - me.currentBet;
-    btnRaise.disabled = me.chips <= toCall || me.chips < minRaiseAmount;
+    btnRaise.disabled = me.chips < minRaiseAmount;
 
     // All-in
     btnAllin.disabled = false;

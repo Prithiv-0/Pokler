@@ -363,12 +363,12 @@ function advanceAfterAction(room) {
 }
 
 function applyAutoActions(room) {
-    let safety = 0;
-    while (room.roundActive && room.currentTurnIndex !== -1 && safety < room.players.length) {
+    let iterationCount = 0;
+    while (room.roundActive && room.currentTurnIndex !== -1 && iterationCount < room.players.length) {
         const player = room.players[room.currentTurnIndex];
         if (!player || player.folded || player.eliminated || player.allIn) {
             room.currentTurnIndex = getNextPendingIndex(room, room.currentTurnIndex);
-            safety += 1;
+            iterationCount += 1;
             continue;
         }
 
@@ -377,7 +377,7 @@ function applyAutoActions(room) {
         const toCall = room.currentBet - player.totalRoundBet;
         const action = toCall > 0 ? 'fold' : 'check';
         handleAction(room, player.id, action, null, { auto: true, skipAutoActions: true });
-        safety += 1;
+        iterationCount += 1;
     }
 }
 
@@ -505,7 +505,7 @@ function handleAction(room, playerId, action, amount, options = {}) {
         case 'raise': {
             let raiseAmount = Number(amount);
             if (!Number.isFinite(raiseAmount) || raiseAmount <= 0) {
-                return { error: 'Raise amount is required' };
+                return { error: 'Invalid raise amount' };
             }
             if (raiseAmount <= toCall) {
                 return { error: `Raise must exceed call of ${toCall} chips` };
@@ -588,7 +588,9 @@ function getRoomState(room, forPlayerId) {
             eliminated: p.eliminated,
             connected: p.connected,
             isYou: p.id === forPlayerId,
-            holeCards: p.id === forPlayerId || isShowdown ? p.holeCards.map(serializeCard) : [],
+            holeCards: p.id === forPlayerId || (isShowdown && !p.folded && !p.eliminated)
+                ? p.holeCards.map(serializeCard)
+                : [],
             cardCount: p.holeCards.length,
         })),
         pot: room.pot,
@@ -624,7 +626,11 @@ function enqueueRoomAction(room, actionFn) {
     room.processingAction = true;
     while (room.actionQueue.length > 0) {
         const next = room.actionQueue.shift();
-        next();
+        try {
+            next();
+        } catch (err) {
+            console.error('Room action failed:', err);
+        }
     }
     room.processingAction = false;
 }
