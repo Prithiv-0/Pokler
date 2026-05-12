@@ -217,6 +217,7 @@ socket.on('disconnect', () => {
     showToast('Disconnected from server. Reconnecting...', 'warning');
     updateConnectionStatus(false);
     pendingAction = false;
+    lastStateVersion = 0;
 });
 
 socket.on('connect', () => {
@@ -389,12 +390,12 @@ function renderHoleCards() {
 }
 
 function getRaiseLimits(me) {
-    const toCall = gameState.currentBet - me.currentBet;
-    const minRaise = gameState.minRaise + toCall;
+    const callAmount = gameState.currentBet - me.currentBet;
+    const minRaise = gameState.minRaise + callAmount;
     const maxRaise = me.chips;
     const raiseFloor = Math.min(minRaise, maxRaise);
-    const canRaise = maxRaise > toCall;
-    return { toCall, minRaise, maxRaise, raiseFloor, canRaise };
+    const canRaise = maxRaise > callAmount;
+    return { callAmount, minRaise, maxRaise, raiseFloor, canRaise };
 }
 
 function renderActions() {
@@ -456,13 +457,13 @@ function renderActions() {
     actionButtons.classList.remove('hidden');
     raisePanel.classList.add('hidden');
 
-    const toCall = gameState.currentBet - me.currentBet;
+    const { callAmount, canRaise } = getRaiseLimits(me);
 
     // Check vs Call
-    if (toCall > 0) {
+    if (callAmount > 0) {
         btnCheck.classList.add('hidden');
         btnCall.classList.remove('hidden');
-        callAmountEl.textContent = Math.min(toCall, me.chips);
+        callAmountEl.textContent = Math.min(callAmount, me.chips);
     } else {
         btnCheck.classList.remove('hidden');
         btnCall.classList.add('hidden');

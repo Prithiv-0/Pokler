@@ -68,7 +68,7 @@ function createRoom(hostId, hostName) {
         processingAction: false,
         pendingToAct: new Set(),
         lastResult: null,
-        lastAnnouncedHandId: 0,
+        lastAnnouncedHandId: -1,
     };
     const host = addPlayer(code, hostId, hostName);
     if (host && host.token) {
@@ -229,9 +229,11 @@ function resolveShowdown(room) {
             awards.set(id, (awards.get(id) || 0) + share);
         });
 
-        if (remainder > 0) {
+        if (remainder > 0 && pot.winners.length > 0) {
             const remainderRecipient = result.seatOrder.find(id => pot.winners.includes(id)) || pot.winners[0];
-            awards.set(remainderRecipient, (awards.get(remainderRecipient) || 0) + remainder);
+            if (remainderRecipient) {
+                awards.set(remainderRecipient, (awards.get(remainderRecipient) || 0) + remainder);
+            }
         }
     });
 
@@ -364,7 +366,7 @@ function advanceAfterAction(room) {
 
 function applyAutoActions(room) {
     let iterationCount = 0;
-    const maxIterations = room.players.length + (room.pendingToAct ? room.pendingToAct.size : 0);
+    const maxIterations = room.players.length;
     while (room.roundActive && room.pendingToAct && room.pendingToAct.size > 0 && iterationCount < maxIterations) {
         if (room.currentTurnIndex === -1) {
             room.currentTurnIndex = getNextPendingIndex(room, 0);
@@ -812,7 +814,7 @@ io.on('connection', (socket) => {
             room.handId = 0;
             room.lastResult = null;
             room.pendingToAct = new Set();
-            room.lastAnnouncedHandId = 0;
+            room.lastAnnouncedHandId = -1;
 
             callback({ success: true });
             broadcastRoomState(room);
