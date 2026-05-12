@@ -10,6 +10,11 @@ let gameState = null;
 let myId = null;
 let isHost = false;
 let raiseMode = false;
+let lastStateVersion = 0;
+let pendingAction = false;
+let resumeInProgress = false;
+
+const SESSION_KEY = 'pokler-session';
 
 // ─── DOM Elements ──────────────────────────────────────────────
 const lobbyView = document.getElementById('lobby-view');
@@ -25,9 +30,15 @@ const lobbyError = document.getElementById('lobby-error');
 // Game Top Bar
 const roomCodeDisplay = document.getElementById('room-code-display');
 const roundStageDisplay = document.getElementById('round-stage-display');
+const handIdDisplay = document.getElementById('hand-id-display');
+const connectionStatus = document.getElementById('connection-status');
 
 // Pot
 const potAmountEl = document.getElementById('pot-amount');
+
+// Board & Cards
+const boardCards = document.getElementById('board-cards');
+const holeCards = document.getElementById('hole-cards');
 
 // Players
 const playersSection = document.getElementById('players-section');
@@ -59,9 +70,6 @@ const raiseConfirm = document.getElementById('raise-confirm');
 // Host Controls
 const hostControls = document.getElementById('host-controls');
 const btnStartRound = document.getElementById('btn-start-round');
-const winnerSelect = document.getElementById('winner-select');
-const winnerOptions = document.getElementById('winner-options');
-const btnAwardPot = document.getElementById('btn-award-pot');
 
 // Menu
 const btnMenu = document.getElementById('btn-menu');
@@ -88,6 +96,7 @@ btnCreate.addEventListener('click', () => {
         if (res.error) return showLobbyError(res.error);
         myId = socket.id;
         isHost = true;
+        saveSession({ code: res.roomCode, token: res.token, name });
         switchToGame();
     });
 });
@@ -104,6 +113,7 @@ btnJoin.addEventListener('click', () => {
         if (res.error) return showLobbyError(res.error);
         myId = socket.id;
         isHost = false;
+        saveSession({ code: res.roomCode, token: res.token, name });
         switchToGame();
     });
 });
@@ -132,11 +142,65 @@ function switchToGame() {
     gameView.classList.add('active');
 }
 
+function saveSession({ code, token, name }) {
+    if (!code || !token || !name) return;
+    localStorage.setItem(SESSION_KEY, JSON.stringify({ code, token, name }));
+}
+
+function loadSession() {
+    try {
+        const raw = localStorage.getItem(SESSION_KEY);
+        return raw ? JSON.parse(raw) : null;
+    } catch (e) {
+        return null;
+    }
+}
+
+function clearSession() {
+    localStorage.removeItem(SESSION_KEY);
+}
+
+function updateConnectionStatus(connected) {
+    if (!connectionStatus) return;
+    if (connected) {
+        connectionStatus.textContent = 'Connected';
+        connectionStatus.classList.remove('disconnected');
+        connectionStatus.classList.add('connected');
+    } else {
+        connectionStatus.textContent = 'Disconnected';
+        connectionStatus.classList.remove('connected');
+        connectionStatus.classList.add('disconnected');
+    }
+}
+
+function attemptResume() {
+    if (resumeInProgress) return;
+    const session = loadSession();
+    if (!session) return;
+    resumeInProgress = true;
+    socket.emit('resume-session', session, (res) => {
+        resumeInProgress = false;
+        if (res && res.success) {
+            myId = socket.id;
+            isHost = !!res.isHost;
+            lastStateVersion = 0;
+            switchToGame();
+            showToast('Session restored', 'info');
+            return;
+        }
+        clearSession();
+    });
+}
+
 // ─── Socket Events ─────────────────────────────────────────────
 socket.on('room-update', (state) => {
+    if (state.stateVersion !== undefined && state.stateVersion <= lastStateVersion) return;
+    lastStateVersion = state.stateVersion || (lastStateVersion + 1);
     gameState = state;
     myId = socket.id;
     isHost = state.hostId === myId;
+    pendingAction = false;
+    raiseMode = false;
     renderGame();
 });
 
@@ -146,14 +210,20 @@ socket.on('toast', (data) => {
 
 socket.on('kicked', () => {
     alert('You have been removed from the room.');
+    clearSession();
     location.reload();
 });
 
 socket.on('disconnect', () => {
     showToast('Disconnected from server. Reconnecting...', 'warning');
+    updateConnectionStatus(false);
+    pendingAction = false;
+    lastStateVersion = 0;
 });
 
 socket.on('connect', () => {
+    updateConnectionStatus(true);
+    attemptResume();
     if (gameState) {
         showToast('Reconnected!', 'info');
     }
@@ -168,6 +238,9 @@ function renderGame() {
     const stageText = gameState.roundStage || 'Waiting';
     roundStageDisplay.textContent = stageText.replace('-', ' ').toUpperCase();
     roundStageDisplay.setAttribute('data-stage', String(gameState.roundStage));
+    if (handIdDisplay) {
+        handIdDisplay.textContent = `Hand #${gameState.handId || 0}`;
+    }
 
     // Pot
     const prevPot = potAmountEl.textContent;
@@ -179,6 +252,10 @@ function renderGame() {
 
     // Players
     renderPlayers();
+
+    // Cards
+    renderBoard();
+    renderHoleCards();
 
     // My status
     const me = gameState.players.find(p => p.isYou);
@@ -259,8 +336,67 @@ function renderPlayers() {
       ${roleHTML}
     `;
 
-        playersSection.appendChild(card);
+    playersSection.appendChild(card);
     });
+}
+
+function formatCard(card) {
+    const suitSymbols = {
+        S: '♠',
+        H: '♥',
+        D: '♦',
+        C: '♣',
+    };
+    if (!card) return { label: '', suitClass: '' };
+    const suitSymbol = suitSymbols[card.suit] || card.suit;
+    const suitClass = card.suit ? `card-suit-${card.suit.toLowerCase()}` : '';
+    return { label: `${card.rank}${suitSymbol}`, suitClass };
+}
+
+function renderBoard() {
+    if (!boardCards || !gameState) return;
+    boardCards.innerHTML = '';
+    const cards = gameState.board || [];
+    for (let i = 0; i < 5; i++) {
+        const cardEl = document.createElement('div');
+        cardEl.className = 'table-card';
+        if (cards[i]) {
+            const formatted = formatCard(cards[i]);
+            cardEl.textContent = formatted.label;
+            if (formatted.suitClass) cardEl.classList.add(formatted.suitClass);
+        } else {
+            cardEl.classList.add('table-card-empty');
+        }
+        boardCards.appendChild(cardEl);
+    }
+}
+
+function renderHoleCards() {
+    if (!holeCards || !gameState) return;
+    holeCards.innerHTML = '';
+    const me = gameState.players.find(p => p.isYou);
+    const cards = me ? me.holeCards || [] : [];
+    for (let i = 0; i < 2; i++) {
+        const cardEl = document.createElement('div');
+        cardEl.className = 'table-card table-card-hole';
+        if (cards[i]) {
+            const formatted = formatCard(cards[i]);
+            cardEl.textContent = formatted.label;
+            if (formatted.suitClass) cardEl.classList.add(formatted.suitClass);
+        } else {
+            cardEl.classList.add('table-card-empty');
+        }
+        holeCards.appendChild(cardEl);
+    }
+}
+
+function getRaiseLimits(me) {
+    const callAmount = Math.max(0, gameState.currentBet - me.currentBet);
+    const minRaise = gameState.minRaise + callAmount;
+    const maxRaise = me.chips;
+    const raiseFloor = Math.min(minRaise, maxRaise);
+    const canRaise = maxRaise > callAmount;
+    return { callAmount, minRaise, maxRaise, raiseFloor, canRaise };
 }
 
 function renderActions() {
@@ -270,13 +406,24 @@ function renderActions() {
     const myIdx = gameState.players.findIndex(p => p.isYou);
     const isMyTurn = myIdx === gameState.currentTurnIndex;
     const roundOn = gameState.roundActive;
+    const showdown = gameState.roundStage === 'showdown';
+
+    if (pendingAction) {
+        actionButtons.classList.add('hidden');
+        raisePanel.classList.add('hidden');
+        waitingMsg.classList.add('active');
+        waitingText.textContent = 'Waiting for server...';
+        return;
+    }
 
     if (!roundOn || me.folded || me.eliminated || me.allIn) {
         actionButtons.classList.add('hidden');
         raisePanel.classList.add('hidden');
         waitingMsg.classList.add('active');
 
-        if (!roundOn) {
+        if (!roundOn && showdown) {
+            waitingText.textContent = 'Showdown complete — review results';
+        } else if (!roundOn) {
             waitingText.textContent = isHost ? 'Deal a new hand to start' : 'Waiting for host to deal...';
         } else if (me.folded) {
             waitingText.textContent = 'You folded this hand';
@@ -311,21 +458,20 @@ function renderActions() {
     actionButtons.classList.remove('hidden');
     raisePanel.classList.add('hidden');
 
-    const toCall = gameState.currentBet - me.currentBet;
+    const { callAmount, canRaise } = getRaiseLimits(me);
 
     // Check vs Call
-    if (toCall > 0) {
+    if (callAmount > 0) {
         btnCheck.classList.add('hidden');
         btnCall.classList.remove('hidden');
-        callAmountEl.textContent = Math.min(toCall, me.chips);
+        callAmountEl.textContent = Math.min(callAmount, me.chips);
     } else {
         btnCheck.classList.remove('hidden');
         btnCall.classList.add('hidden');
     }
 
     // Raise
-    const minRaiseAmount = gameState.minRaise + gameState.currentBet - me.currentBet;
-    btnRaise.disabled = me.chips <= toCall;
+    btnRaise.disabled = !canRaise;
 
     // All-in
     btnAllin.disabled = false;
@@ -345,46 +491,14 @@ function renderHostControls() {
 
     hostControls.classList.remove('hidden');
 
-    const showdown = gameState.roundStage === 'showdown';
     const roundActive = gameState.roundActive;
-
-    if (showdown) {
-        btnStartRound.classList.add('hidden');
-        winnerSelect.classList.remove('hidden');
-        renderWinnerOptions();
-    } else if (!roundActive) {
+    if (!roundActive) {
         btnStartRound.classList.remove('hidden');
-        winnerSelect.classList.add('hidden');
         const eligible = gameState.players.filter(p => !p.eliminated).length;
         btnStartRound.disabled = eligible < 2;
     } else {
         btnStartRound.classList.add('hidden');
-        winnerSelect.classList.add('hidden');
     }
-}
-
-function renderWinnerOptions() {
-    const activePlayers = gameState.players.filter(p => !p.eliminated && !p.folded);
-
-    // Check if only one player is left (everyone else folded)
-    if (activePlayers.length === 1) {
-        // Auto-award
-        const winnerId = activePlayers[0].id;
-        socket.emit('end-round', { winnerIds: [winnerId] }, (res) => {
-            if (res.error) showToast(res.error, 'warning');
-        });
-        return;
-    }
-
-    winnerOptions.innerHTML = '';
-    activePlayers.forEach(p => {
-        const btn = document.createElement('button');
-        btn.className = 'winner-option';
-        btn.textContent = p.name;
-        btn.dataset.playerId = p.id;
-        btn.addEventListener('click', () => btn.classList.toggle('selected'));
-        winnerOptions.appendChild(btn);
-    });
 }
 
 function renderActionLog() {
@@ -405,7 +519,10 @@ function renderActionLog() {
             div.textContent = `Dealer: ${entry.dealer} | SB: ${entry.smallBlind.name} (${entry.smallBlind.amount}) | BB: ${entry.bigBlind.name} (${entry.bigBlind.amount})`;
         } else if (entry.type === 'round-end') {
             div.classList.add('log-entry-win');
-            const winners = entry.winners.map(w => `${w.name} +${w.amount}`).join(', ');
+            const winners = entry.winners.map(w => {
+                const handText = w.hand ? ` (${w.hand})` : '';
+                return `${w.name} +${w.amount}${handText}`;
+            }).join(', ');
             div.textContent = `🏆 ${winners}`;
         }
 
@@ -417,9 +534,14 @@ function renderActionLog() {
 
 // ─── Action Handlers ───────────────────────────────────────────
 function doAction(action, amount) {
+    if (pendingAction) return;
+    pendingAction = true;
+    renderActions();
     socket.emit('player-action', { action, amount }, (res) => {
         if (res.error) {
+            pendingAction = false;
             showToast(res.error, 'warning');
+            renderActions();
         }
         raiseMode = false;
     });
@@ -435,14 +557,18 @@ btnRaise.addEventListener('click', () => {
     const me = gameState.players.find(p => p.isYou);
     if (!me) return;
 
-    const toCall = gameState.currentBet - me.currentBet;
-    const minRaise = gameState.minRaise + toCall;
-    const maxRaise = me.chips;
+    const limits = getRaiseLimits(me);
+    if (!limits.canRaise) {
+        showToast('Not enough chips to raise', 'warning');
+        raiseMode = false;
+        renderActions();
+        return;
+    }
 
-    raiseSlider.min = minRaise;
-    raiseSlider.max = maxRaise;
-    raiseSlider.value = minRaise;
-    raiseValue.textContent = minRaise;
+    raiseSlider.min = limits.raiseFloor;
+    raiseSlider.max = limits.maxRaise;
+    raiseSlider.value = limits.raiseFloor;
+    raiseValue.textContent = limits.raiseFloor;
 
     renderActions();
 });
@@ -479,10 +605,9 @@ raisePresets.addEventListener('click', (e) => {
         value = Math.floor(gameState.currentBet * multiply);
     }
 
-    const toCall = gameState.currentBet - me.currentBet;
-    const minRaise = gameState.minRaise + toCall;
-    value = Math.max(value, minRaise);
-    value = Math.min(value, me.chips);
+    const limits = getRaiseLimits(me);
+    value = Math.max(value, limits.raiseFloor);
+    value = Math.min(value, limits.maxRaise);
 
     raiseSlider.value = value;
     raiseValue.textContent = value;
@@ -493,20 +618,6 @@ btnStartRound.addEventListener('click', () => {
     btnStartRound.disabled = true;
     socket.emit('start-round', (res) => {
         btnStartRound.disabled = false;
-        if (res.error) showToast(res.error, 'warning');
-    });
-});
-
-btnAwardPot.addEventListener('click', () => {
-    const selected = winnerOptions.querySelectorAll('.winner-option.selected');
-    const winnerIds = Array.from(selected).map(b => b.dataset.playerId);
-
-    if (winnerIds.length === 0) {
-        showToast('Select at least one winner', 'warning');
-        return;
-    }
-
-    socket.emit('end-round', { winnerIds }, (res) => {
         if (res.error) showToast(res.error, 'warning');
     });
 });
@@ -535,6 +646,7 @@ btnResetGame.addEventListener('click', () => {
 
 btnLeave.addEventListener('click', () => {
     if (confirm('Leave the room?')) {
+        clearSession();
         location.reload();
     }
 });
